@@ -64,6 +64,7 @@ cd "${destination}"
 cd "${path_to_repo}"
 
 commit_sha="$(git rev-parse HEAD)"
+branch="$(cat .git/branch)"
 
 curl \
     --request POST \
@@ -72,7 +73,7 @@ curl \
     --data "{\"state\":\"${new_status}\",\"name\":\"${build_label}\",\"target_url\":\"${target_url}\"}" \
     "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/statuses/${commit_sha}"
 
-version="{\"sha\":\"${commit_sha}\"}"
+version="{\"sha\":\"${commit_sha}\", \"branch\":\"${branch}\"}"
 
 jq -n "{
     version: ${version},

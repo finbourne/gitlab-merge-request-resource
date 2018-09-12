@@ -20,6 +20,7 @@ uri="$(jq -r '.source.uri // ""' < "${payload}")"
 private_token="$(jq -r '.source.private_token // ""' < "${payload}")"
 no_ssl="$(jq -r '.source.no_ssl // ""' < "${payload}")"
 version_sha="$(jq -r '.version.sha // ""' < "${payload}")"
+branch="$(jq -r '.version.branch // ""' < "${payload}")"
 
 if [[ "${uri}" == *"git@"* ]]; then
   gitlab_host="$(echo "${uri}" | sed -rn 's/.*git@(.*):([0-9]*\/+)?(.*)\.git/\1/p')"
@@ -43,19 +44,22 @@ if [ ! -z "${version_sha}" ]; then
         | jq '.committed_date|.[:19]|strptime("%Y-%m-%dT%H:%M:%S")|mktime')"
 fi
 
-open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at")"
+open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&work_in_progress=false")"
 num_mrs="$(echo "${open_mrs}" | jq 'length')"
 
 new_versions=''
 
 for i in $(seq 0 $((num_mrs - 1))); do
     mr="$(echo "${open_mrs}" | jq -r '.['"$i"']')"
+    mr_target_branch="$(echo "${mr}" | jq -r '.target_branch')"
+    mr_wip="$(echo "${mr}" | jq -r '.work_in_progress')"
     mr_sha="$(echo "${mr}" | jq -r '.sha')"
+    mr_branch="$(echo "${mr}" | jq -r '.source_branch')"
     if [ "${mr_sha}" != "null" ]; then
         mr_updated_at="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/repository/commits/${mr_sha}" \
             | jq '.committed_date|.[:19]|strptime("%Y-%m-%dT%H:%M:%S")|mktime')"
         if [ "${mr_updated_at}" -gt "${version_updated_at}" ] || [ -z "${version_sha}" ]; then
-            new_versions="${new_versions},{\"sha\":\"${mr_sha}\"}"
+            new_versions="${new_versions},{\"sha\":\"${mr_sha}\", \"branch\":\"${mr_branch}\"}"
         fi
     fi
 done
@@ -64,7 +68,7 @@ new_versions="${new_versions#','}" # remove trailing comma
 new_versions="[${new_versions}]" # make JSON array
 
 if [ "${new_versions}" == '[]' ] && ! [ -z "${version_sha}" ]; then
-    new_versions="[{\"sha\":\"${version_sha}\"}]"
+    new_versions="[{\"sha\":\"${version_sha}\", \"branch\":\"${branch}\"}]"
 fi
 
 jq -n "${new_versions}" >&3
