@@ -44,7 +44,7 @@ if [ ! -z "${version_sha}" ]; then
         | jq '.committed_date|.[:19]|strptime("%Y-%m-%dT%H:%M:%S")|mktime')"
 fi
 
-open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&work_in_progress=false")"
+open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&wip=no" | jq '[ .[] | select (.target_branch == "master") | select(.merge_status=="can_be_merged")]')"
 num_mrs="$(echo "${open_mrs}" | jq 'length')"
 
 new_versions=''
