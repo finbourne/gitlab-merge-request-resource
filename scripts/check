@@ -39,8 +39,9 @@ fi
 
 version_updated_at=0
 if [ ! -z "${version_sha}" ]; then
-    version_updated_at="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/repository/commits/${version_sha}" \
-        | jq '.committed_date|.[:19]|strptime("%Y-%m-%dT%H:%M:%S")|mktime')"
+    gitlab_committed_date="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/repository/commits/${version_sha}" \
+        | jq -r '.committed_date')"
+    version_updated_at=$(date -d "$gitlab_committed_date" +%s)
 fi
 
 open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at")"
@@ -52,8 +53,9 @@ for i in $(seq 0 $((num_mrs - 1))); do
     mr="$(echo "${open_mrs}" | jq -r '.['"$i"']')"
     mr_sha="$(echo "${mr}" | jq -r '.sha')"
     if [ "${mr_sha}" != "null" ]; then
-        mr_updated_at="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/repository/commits/${mr_sha}" \
-            | jq '.committed_date|.[:19]|strptime("%Y-%m-%dT%H:%M:%S")|mktime')"
+        gitlab_committed_date="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/repository/commits/${mr_sha}" \
+            | jq -r '.committed_date')"
+        mr_updated_at=$(date -d "$gitlab_committed_date" +%s)
         if [ "${mr_updated_at}" -gt "${version_updated_at}" ] || [ -z "${version_sha}" ]; then
             new_versions="${new_versions},{\"sha\":\"${mr_sha}\"}"
         fi
