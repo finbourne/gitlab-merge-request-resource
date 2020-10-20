@@ -52,6 +52,9 @@ fi
 git clone "${uri}" "${destination}"
 
 cd "${destination}"
+branch_name="$(git name-rev "${commit_sha}" --name-only | sed -n 's:remotes/origin/::p')"
+git checkout ${branch_name}
+echo ${branch_name} > .git/branch
 
 git reset --hard "${commit_sha}"
 
