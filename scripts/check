@@ -14,12 +14,15 @@ payload="$(mktemp "${TMPDIR}/gitlab-merge-request-resource.XXXXXX")"
 
 cat > "${payload}" <&0
 
+log_file="$(mktemp "${TMPDIR}/log-file.XXXXXX")"
+
 configure_ssl_verification "${payload}"
 
 uri="$(jq -r '.source.uri // ""' < "${payload}")"
 private_token="$(jq -r '.source.private_token // ""' < "${payload}")"
 no_ssl="$(jq -r '.source.no_ssl // ""' < "${payload}")"
 version_sha="$(jq -r '.version.sha // ""' < "${payload}")"
+branch="$(jq -r '.version.branch // ""' < "${payload}")"
 
 if [[ "${uri}" == *"git@"* ]]; then
   gitlab_host="$(echo "${uri}" | sed -rn 's/.*git@(.*):([0-9]*\/+)?(.*)\.git/\1/p')"
@@ -38,26 +41,46 @@ if [ "${no_ssl}" == 'true' ]; then
 fi
 
 version_updated_at=0
-if [ ! -z "${version_sha}" ]; then
+if [ -n "${version_sha}" ]; then
     gitlab_committed_date="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/repository/commits/${version_sha}" \
         | jq -r '.committed_date')"
     version_updated_at=$(date -d "$gitlab_committed_date" +%s)
 fi
+printf "Version updated at: %s" "${version_updated_at}" >> "${log_file}"
 
-open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at")"
+open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&wip=no" | jq '[ .[] | select (.target_branch == "master")]')"
 num_mrs="$(echo "${open_mrs}" | jq 'length')"
+printf "\nNumber of open mrs: %s" "${num_mrs}" >> "${log_file}"
 
-new_versions=''
+# If a version sha is passed in, add that sha to the output.
+if [ -n "${version_sha}" ] && [ -n "${branch}" ]; then
+    printf "\nVersion sha %s passed in, adding to output" "${version_sha}" >> "${log_file}"
+    new_versions="{\"sha\":\"${version_sha}\", \"branch\":\"${branch}\"}"
+else
+    new_versions=''
+fi
+
+printf "\nChecking for new updates..." >> "${log_file}"
 
 for i in $(seq 0 $((num_mrs - 1))); do
     mr="$(echo "${open_mrs}" | jq -r '.['"$i"']')"
+    mr_title="$(echo "${mr}" | jq -r '.title')"
+    mr_target_branch="$(echo "${mr}" | jq -r '.target_branch')"
+    mr_wip="$(echo "${mr}" | jq -r '.work_in_progress')"
     mr_sha="$(echo "${mr}" | jq -r '.sha')"
+    mr_branch="$(echo "${mr}" | jq -r '.source_branch')"
+    printf "\n\nChecking mr %s..." "${mr_title}" >> "${log_file}"
+    printf "\nsha: %s" "${mr_sha}" >> ${log_file}
     if [ "${mr_sha}" != "null" ]; then
         gitlab_committed_date="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/repository/commits/${mr_sha}" \
             | jq -r '.committed_date')"
         mr_updated_at=$(date -d "$gitlab_committed_date" +%s)
+        printf "\nChecking MR updated date %s against version updated date %s" "${mr_updated_at}" "${version_updated_at}\n" >> "${log_file}"
         if [ "${mr_updated_at}" -gt "${version_updated_at}" ] || [ -z "${version_sha}" ]; then
-            new_versions="${new_versions},{\"sha\":\"${mr_sha}\"}"
+            printf "\n\tAdding to versions file" >> "${log_file}"
+            new_versions="${new_versions},{\"sha\":\"${mr_sha}\", \"branch\":\"${mr_branch}\"}"
+        else
+            printf "\n\tNot adding to versions file" >> "${log_file}"
         fi
     fi
 done
@@ -66,7 +89,10 @@ new_versions="${new_versions#','}" # remove trailing comma
 new_versions="[${new_versions}]" # make JSON array
 
 if [ "${new_versions}" == '[]' ] && ! [ -z "${version_sha}" ]; then
-    new_versions="[{\"sha\":\"${version_sha}\"}]"
+    new_versions="[{\"sha\":\"${version_sha}\", \"branch\":\"${branch}\"}]"
 fi
+versions_file="$(mktemp  "${TMPDIR}/gitlab-version-output.XXXXXX")"
+printf "New versions: ${new_versions}"
+echo "${new_versions}" > "${versions_file}"
 
 jq -n "${new_versions}" >&3

@@ -29,6 +29,7 @@ password="$(jq -r '.source.password // ""' < "${payload}")"
 private_key="$(jq -r '.source.private_key // ""' < "${payload}")"
 version="$(jq -r '.version // ""' < "${payload}")"
 commit_sha="$(echo "${version}" | jq -r '.sha // ""')"
+branch="$(echo "${version}" | jq -r '.branch // ""')"
 
 if [[ ! -z "${private_key}" ]]; then
     gitlab_host="$(echo "${uri}" | sed -rn 's/.*git@(.*):([0-9]*\/+)?(.*)\.git/\1/p')"
@@ -53,6 +54,11 @@ git clone "${uri}" "${destination}"
 
 cd "${destination}"
 
+echo "${branch}" >.git/branch
+echo "${commit_sha}" >.git/commit_sha
+echo "${uri}" >.git/project_id
+
+git checkout ${branch}
 git reset --hard "${commit_sha}"
 
 jq -n "{
