@@ -48,7 +48,7 @@ if [ -n "${version_sha}" ]; then
 fi
 printf "Version updated at: %s" "${version_updated_at}" >> "${log_file}"
 
-open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&wip=no" | jq '[ .[] | select (.target_branch == "master")]')"
+open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&wip=no&per_page=100" | jq '[ .[] | select (.target_branch == "master")]')"
 num_mrs="$(echo "${open_mrs}" | jq 'length')"
 printf "\nNumber of open mrs: %s" "${num_mrs}" >> "${log_file}"
 
