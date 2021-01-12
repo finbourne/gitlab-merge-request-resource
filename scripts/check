@@ -20,9 +20,14 @@ configure_ssl_verification "${payload}"
 
 uri="$(jq -r '.source.uri // ""' < "${payload}")"
 private_token="$(jq -r '.source.private_token // ""' < "${payload}")"
+merge_into="$(jq -r '.source.merge_into // ""' < "${payload}")"
 no_ssl="$(jq -r '.source.no_ssl // ""' < "${payload}")"
 version_sha="$(jq -r '.version.sha // ""' < "${payload}")"
 branch="$(jq -r '.version.branch // ""' < "${payload}")"
+
+if [ -z "${merge_into}" ]; then
+    merge_into="master"
+fi
 
 if [[ "${uri}" == *"git@"* ]]; then
   gitlab_host="$(echo "${uri}" | sed -rn 's/.*git@(.*):([0-9]*\/+)?(.*)\.git/\1/p')"
@@ -48,7 +53,7 @@ if [ -n "${version_sha}" ]; then
 fi
 printf "Version updated at: %s" "${version_updated_at}" >> "${log_file}"
 
-open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&wip=no&per_page=100" | jq '[ .[] | select (.target_branch == "master")]')"
+open_mrs="$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/merge_requests?state=opened&order_by=updated_at&wip=no&per_page=100" | jq "[ .[] | select (.target_branch == \"${merge_into}\")]")"
 num_mrs="$(echo "${open_mrs}" | jq 'length')"
 printf "\nNumber of open mrs: %s" "${num_mrs}" >> "${log_file}"
 
