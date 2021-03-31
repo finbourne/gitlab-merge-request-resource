@@ -58,9 +58,9 @@ num_mrs="$(echo "${open_mrs}" | jq 'length')"
 printf "\nNumber of open mrs: %s" "${num_mrs}" >> "${log_file}"
 
 # If a version sha is passed in, add that sha to the output.
-if [ -n "${version_sha}" ] && [ -n "${branch}" ]; then
+if [ -n "${version_sha}" ] && [ -n "${branch}" ] && [ -n "${iid}" ]; then
     printf "\nVersion sha %s passed in, adding to output" "${version_sha}" >> "${log_file}"
-    new_versions="{\"sha\":\"${version_sha}\", \"branch\":\"${branch}\"}"
+    new_versions="{\"sha\":\"${version_sha}\", \"branch\":\"${branch}\", \"iid\":\"${iid}\"}"
 else
     new_versions=''
 fi
@@ -73,6 +73,7 @@ for i in $(seq 0 $((num_mrs - 1))); do
     mr_target_branch="$(echo "${mr}" | jq -r '.target_branch')"
     mr_wip="$(echo "${mr}" | jq -r '.work_in_progress')"
     mr_sha="$(echo "${mr}" | jq -r '.sha')"
+    mr_iid="$(echo "${mr}" | jq -r '.iid')"
     mr_branch="$(echo "${mr}" | jq -r '.source_branch')"
     printf "\n\nChecking mr %s..." "${mr_title}" >> "${log_file}"
     printf "\nsha: %s" "${mr_sha}" >> ${log_file}
@@ -83,7 +84,7 @@ for i in $(seq 0 $((num_mrs - 1))); do
         printf "\nChecking MR updated date %s against version updated date %s" "${mr_updated_at}" "${version_updated_at}\n" >> "${log_file}"
         if [ "${mr_updated_at}" -gt "${version_updated_at}" ] || [ -z "${version_sha}" ]; then
             printf "\n\tAdding to versions file" >> "${log_file}"
-            new_versions="${new_versions},{\"sha\":\"${mr_sha}\", \"branch\":\"${mr_branch}\"}"
+            new_versions="${new_versions},{\"sha\":\"${mr_sha}\", \"branch\":\"${mr_branch}\", \"iid\":\"${mr_iid}\"}"
         else
             printf "\n\tNot adding to versions file" >> "${log_file}"
         fi
@@ -94,7 +95,7 @@ new_versions="${new_versions#','}" # remove trailing comma
 new_versions="[${new_versions}]" # make JSON array
 
 if [ "${new_versions}" == '[]' ] && ! [ -z "${version_sha}" ]; then
-    new_versions="[{\"sha\":\"${version_sha}\", \"branch\":\"${branch}\"}]"
+    new_versions="[{\"sha\":\"${version_sha}\", \"branch\":\"${branch}\", \"iid\":\"${iid}\"}]"
 fi
 versions_file="$(mktemp  "${TMPDIR}/gitlab-version-output.XXXXXX")"
 printf "New versions: ${new_versions}"
