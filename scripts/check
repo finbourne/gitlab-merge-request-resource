@@ -24,6 +24,7 @@ merge_into="$(jq -r '.source.merge_into // ""' < "${payload}")"
 no_ssl="$(jq -r '.source.no_ssl // ""' < "${payload}")"
 version_sha="$(jq -r '.version.sha // ""' < "${payload}")"
 branch="$(jq -r '.version.branch // ""' < "${payload}")"
+iid="$(jq -r '.version.iid // ""' < "${payload}")"
 
 if [ -z "${merge_into}" ]; then
     merge_into="master"
