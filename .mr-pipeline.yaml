@@ -1,0 +1,119 @@
+resource_types:
+  - name: merge-request
+    source:
+      password: ((harbor.tools_token))
+      repository: harbor.finbourne.com/tools/concourse-gitlab-mr-resource
+      tag: v0.11.27
+      username: robot$concourse
+    type: docker-image
+  - name: s3-bucket
+    source:
+      password: ((harbor.tools_token))
+      repository: harbor.finbourne.com/tools/s3-resource-simple
+      username: robot$concourse
+    type: docker-image
+  - name: semver
+    source:
+      password: ((harbor.tools_token))
+      repository: harbor.finbourne.com/tools/semver-resource
+      username: robot$concourse
+    type: docker-image
+
+resources:
+  - icon: source-pull
+    name: merge-request-core
+    source:
+      private_key: ((gitlab.id_rsa))
+      private_token: ((gitlab.access_token))
+      uri: git@gitlab.finbourne.com:lusid/lusid-ibor.git
+    type: merge-request
+  - icon: nas
+    name: nuget-config
+    source:
+      bucket: fbn-prod-prod-config
+      path: nuget
+      region: eu-west-1
+    type: s3-bucket
+  - icon: exponent
+    name: lusid-sdk-version
+    source:
+      branch: master
+      driver: git
+      file: lusid-sdk.version
+      private_key: ((gitlab.id_rsa))
+      uri: git@gitlab.finbourne.com:cicd/versions.git
+    type: semver
+  - icon: exponent
+    name: lusid-api-version
+    source:
+      branch: master
+      driver: git
+      file: lusid-api.version
+      private_key: ((gitlab.id_rsa))
+      uri: git@gitlab.finbourne.com:cicd/versions.git
+    type: semver
+  - icon: nas
+    name: certificates
+    source:
+      bucket: fbn-infra
+      path: certs
+      region: eu-west-1
+    type: s3-bucket
+  - icon: nas
+    name: api-key
+    source:
+      bucket: fbn-infra
+      path: nuget
+      region: eu-west-1
+    type: s3-bucket
+
+jobs:
+  - max_in_flight: 6
+    name: merge-request
+    plan:
+      - get: source-code-lusid-ibor
+        resource: merge-request-core
+        trigger: true
+        version: every
+      - in_parallel:
+          - get: api-key
+          - get: certificates
+          - get: lusid-sdk-version
+            params:
+              bump: patch
+          - get: lusid-api-version
+            params:
+              bump: patch
+          - get: nuget-config
+      - config:
+          image_resource:
+            source:
+              password: ((harbor.build_token))
+              repository: harbor.finbourne.com/build/dotnetcore-pg-sonar
+              username: robot$concourse
+            type: docker-image
+          inputs:
+            - name: source-code-lusid-ibor
+            - name: lusid-api-version
+            - name: lusid-sdk-version
+            - name: nuget-config
+          params:
+            API_VERSION_FILE: lusid-api-version/version
+            OSS_INDEX_PASSWORD: ((oss-index.OSS_INDEX_PASSWORD))
+            OSS_INDEX_USERNAME: ((oss-index.OSS_INDEX_USERNAME))
+            SONAR_BRANCH: master
+            SONAR_TOKEN: ((sonar.token))
+            VERSION_FILE: lusid-sdk-version/version
+          platform: linux
+          run:
+            args:
+              - -ce
+              - |
+                # Change the $TERM variable (from default 'dumb') to encourage commands to output in colour
+                export TERM="linux"
+
+                echo Doing nothing, this is just a test.
+            dir: source-code-lusid-ibor
+            path: /bin/bash
+        task: sonar-quality-check
+        timeout: 90m

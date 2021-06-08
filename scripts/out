@@ -65,15 +65,19 @@ cd "${path_to_repo}"
 
 commit_sha="$(git rev-parse HEAD)"
 branch="$(cat .git/branch)"
+iid="$(cat .git/iid)"
+updated_at="$(git log -1 --format=%ct)"
 
+set -e
 curl \
     --request POST \
     --header "PRIVATE-TOKEN: ${private_token}" \
     --header 'Content-Type: application/json' \
     --data "{\"state\":\"${new_status}\",\"name\":\"${build_label}\",\"target_url\":\"${target_url}\"}" \
     "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")/statuses/${commit_sha}"
+set +e 
 
-version="{\"sha\":\"${commit_sha}\", \"branch\":\"${branch}\"}"
+version="{\"sha\":\"${commit_sha}\", \"branch\":\"${branch}\", \"iid\":\"${iid}\", \"last_commit_epoch\":\"${updated_at}\"}"
 
 jq -n "{
     version: ${version},
