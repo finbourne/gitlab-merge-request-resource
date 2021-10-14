@@ -30,6 +30,8 @@ private_key="$(jq -r '.source.private_key // ""' < "${payload}")"
 version="$(jq -r '.version // ""' < "${payload}")"
 commit_sha="$(echo "${version}" | jq -r '.sha // ""')"
 branch="$(echo "${version}" | jq -r '.branch // ""')"
+iid="$(echo "${version}" | jq -r '.iid // ""')"
+last_commit_epoch="$(echo "${version}" | jq -r '.last_commit_epoch // ""')"
 
 if [[ ! -z "${private_key}" ]]; then
     gitlab_host="$(echo "${uri}" | sed -rn 's/.*git@(.*):([0-9]*\/+)?(.*)\.git/\1/p')"
@@ -57,6 +59,7 @@ cd "${destination}"
 echo "${branch}" >.git/branch
 echo "${commit_sha}" >.git/commit_sha
 echo "${uri}" >.git/project_id
+echo "${iid}" >.git/iid
 
 git checkout ${branch}
 git reset --hard "${commit_sha}"

@@ -41,6 +41,12 @@ else
   protocol="$(echo "${uri}" | sed -rn 's/(https?):\/\/([^\/]*)\/(.*)\.git/\1/p')"
 fi
 
+test_resp=$(curl -s -H "private-token: ${private_token}" "${protocol}://${gitlab_host}/api/v4/projects/$(urlencode "${project_path}")")
+if [ "${test_resp}" == '{"message":"404 Project Not Found"}' ]; then
+    project_path="$(echo "${project_path}" | sed '/finbourne\//!s/^/finbourne\//')"
+fi
+printf "\nProject Path: %s" "${project_path}"
+
 if [ "${no_ssl}" == 'true' ]; then
     protocol='http'
 fi
