@@ -1,3 +1,5 @@
+![LUSID_by_Finbourne](./resources/Finbourne_Logo_Teal.svg)
+
 # GitLab Merge Request Concourse Resource
 
 A concourse resource to check for new merge requests on GitLab and update the merge request status.
